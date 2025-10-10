@@ -8,24 +8,21 @@
 
 <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
   <div style="text-align: center;">
-    <video width="300" height="200" controls style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-      <source src="https://reactdiff.github.io/assets/media/video-3.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
+    <a href="https://reactdiff.github.io/assets/media/video-3.mp4" target="_blank">
+      <img src="https://img.shields.io/badge/🎭-Watch%20Demo-blue?style=for-the-badge&logo=video" alt="Realistic Listener Reactions" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
+    </a>
     <p style="margin-top: 8px; font-size: 14px; color: #666;">🎭 Realistic Listener Reactions</p>
   </div>
   <div style="text-align: center;">
-    <video width="300" height="200" controls style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-      <source src="https://reactdiff.github.io/assets/media/video-2.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
+    <a href="https://reactdiff.github.io/assets/media/video-2.mp4" target="_blank">
+      <img src="https://img.shields.io/badge/🎬-Watch%20Demo-green?style=for-the-badge&logo=video" alt="30-Second Full Sequences" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
+    </a>
     <p style="margin-top: 8px; font-size: 14px; color: #666;">🎬 30-Second Full Sequences</p>
   </div>
   <div style="text-align: center;">
-    <video width="300" height="200" controls style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-      <source src="https://reactdiff.github.io/assets/media/video-4.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
+    <a href="https://reactdiff.github.io/assets/media/video-4.mp4" target="_blank">
+      <img src="https://img.shields.io/badge/⚡-Watch%20Demo-orange?style=for-the-badge&logo=video" alt="Real-Time Processing" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
+    </a>
     <p style="margin-top: 8px; font-size: 14px; color: #666;">⚡ Real-Time Processing</p>
   </div>
 </div>
@@ -38,20 +35,18 @@
 
 **High-quality listener reaction generation with ReactDiff**
 
-<video width="800" height="450" controls style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); margin: 20px 0;">
-  <source src="https://reactdiff.github.io/assets/media/video-3.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+### 📺 Video 1: Realistic Listener Reactions
+[![Watch Demo](https://img.shields.io/badge/🎭-Watch%20Realistic%20Listener%20Reactions-blue?style=for-the-badge&logo=video)](https://reactdiff.github.io/assets/media/video-3.mp4)
 
-<video width="800" height="450" controls style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); margin: 20px 0;">
-  <source src="https://reactdiff.github.io/assets/media/video-2.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+### 📺 Video 2: 30-Second Full Sequences  
+[![Watch Demo](https://img.shields.io/badge/🎬-Watch%2030s%20Full%20Sequences-green?style=for-the-badge&logo=video)](https://reactdiff.github.io/assets/media/video-2.mp4)
 
-<video width="800" height="450" controls style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); margin: 20px 0;">
-  <source src="https://reactdiff.github.io/assets/media/video-4.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+### 📺 Video 3: Real-Time Processing
+[![Watch Demo](https://img.shields.io/badge/⚡-Watch%20Real--Time%20Processing-orange?style=for-the-badge&logo=video)](https://reactdiff.github.io/assets/media/video-4.mp4)
+
+---
+
+**💡 Tip**: Click the buttons above to watch the demo videos in a new tab. The videos showcase ReactDiff's ability to generate realistic listener facial reactions from speaker audio and visual cues.
 
 </div>
 
