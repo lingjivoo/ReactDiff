@@ -6,21 +6,53 @@
 [![Paper](https://img.shields.io/badge/📄-Paper%20arXiv-red)](https://arxiv.org/abs/2510.04712)
 [![Code](https://img.shields.io/badge/💻-Code%20GitHub-black)](https://github.com/lingjivoo/ReactDiff)
 
-<div style="display: flex; justify-content: center; gap: 10px;">
-  <img src="https://via.placeholder.com/300x200/4CAF50/white?text=Sample+Video+1" width="30%"/>
-  <img src="https://via.placeholder.com/300x200/2196F3/white?text=Sample+Video+2" width="30%"/>
-  <img src="https://via.placeholder.com/300x200/FF9800/white?text=Sample+Video+3" width="30%"/>
+<div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+  <div style="text-align: center;">
+    <video width="300" height="200" controls style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+      <source src="https://reactdiff.github.io/assets/media/video-3.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    <p style="margin-top: 8px; font-size: 14px; color: #666;">🎭 Realistic Listener Reactions</p>
+  </div>
+  <div style="text-align: center;">
+    <video width="300" height="200" controls style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+      <source src="https://reactdiff.github.io/assets/media/video-2.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    <p style="margin-top: 8px; font-size: 14px; color: #666;">🎬 30-Second Full Sequences</p>
+  </div>
+  <div style="text-align: center;">
+    <video width="300" height="200" controls style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+      <source src="https://reactdiff.github.io/assets/media/video-4.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    <p style="margin-top: 8px; font-size: 14px; color: #666;">⚡ Real-Time Processing</p>
+  </div>
 </div>
 
 </div>
 
 <div align="center">
   
-https://via.placeholder.com/800x200/4CAF50/white?text=Demo+Video+1  
+## 🎥 Demo Videos
 
-https://via.placeholder.com/800x200/2196F3/white?text=Demo+Video+2  
+**High-quality listener reaction generation with ReactDiff**
 
-https://via.placeholder.com/800x200/FF9800/white?text=Demo+Video+3
+<video width="800" height="450" controls style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); margin: 20px 0;">
+  <source src="https://reactdiff.github.io/assets/media/video-3.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+<video width="800" height="450" controls style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); margin: 20px 0;">
+  <source src="https://reactdiff.github.io/assets/media/video-2.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+<video width="800" height="450" controls style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.15); margin: 20px 0;">
+  <source src="https://reactdiff.github.io/assets/media/video-4.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
 </div>
 
 ## 📢 News
@@ -319,20 +351,6 @@ python sample.py \
 
 </details>
 
-<details>
-<summary><b>Test Full Sequences</b></summary>
-
-For testing with full 30-second sequences:
-
-```bash
-python test_full_sequence.py \
-  --checkpoint /path/to/checkpoint.pth \
-  --out-path ./results/full_30s_test
-```
-
-This script ensures proper configuration for generating complete 30-second videos.
-
-</details>
 
 ---
 
