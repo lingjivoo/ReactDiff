@@ -1,0 +1,363 @@
+#!/usr/bin/env python3
+
+"""Trains Karras et al. (2022) diffusion models."""
+
+import argparse
+from copy import deepcopy
+import json
+from pathlib import Path
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from external.wav2vec2focctc import Wav2Vec2ForCTC
+
+import accelerate
+import torch
+from torch import nn, optim
+from torch import multiprocessing as mp
+from tqdm.auto import trange, tqdm
+from data.dataset import get_dataloader
+import models.k_diffusion as K
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument('--batch-size', type=int, default=100,
+                   help='the batch size')
+    p.add_argument('--config', type=str, required=True,
+                   help='the configuration file')
+    p.add_argument('--evaluate-every', type=int, default=10000,
+                   help='save a demo grid every this many steps')
+    p.add_argument('--evaluate-n', type=int, default=2000,
+                   help='the number of samples to draw to evaluate')
+    p.add_argument('--gns', action='store_true',
+                   help='measure the gradient noise scale (DDP only)')
+    p.add_argument('--grad-accum-steps', type=int, default=1,
+                   help='the number of gradient accumulation steps')
+    p.add_argument('--grow', type=str,
+                   help='the checkpoint to grow from')
+    p.add_argument('--grow-config', type=str,
+                   help='the configuration file of the model to grow from')
+    p.add_argument('--lr', type=float,
+                   help='the learning rate')
+    p.add_argument('--mixed-precision', type=str,
+                   help='the mixed precision type')
+    p.add_argument('--name', type=str, default='model',
+                   help='the name of the run')
+    p.add_argument('--num-workers', type=int, default=8,
+                   help='the number of data loader workers')
+    p.add_argument('--resume', type=str,
+                   help='the checkpoint to resume from')
+    p.add_argument('--sample-n', type=int, default=64,
+                   help='the number of images to sample for demo grids')
+    p.add_argument('--save-every', type=int, default=10000,
+                   help='save every this many steps')
+    p.add_argument('--seed', type=int,
+                   help='the random seed')
+    p.add_argument('--start-method', type=str, default='spawn',
+                   choices=['fork', 'forkserver', 'spawn'],
+                   help='the multiprocessing start method')
+    p.add_argument('--wandb-entity', type=str,
+                   help='the wandb entity name')
+    p.add_argument('--wandb-group', type=str,
+                   help='the wandb group name')
+    p.add_argument('--wandb-project', type=str,
+                   help='the wandb project name (specify this to enable wandb)')
+    p.add_argument('--wandb-save-model', action='store_true',
+                   help='save model to wandb')
+    p.add_argument('--weight-kinematics-loss', type=float, default=0.01,
+                   help='the weight of kinematics loss')
+    p.add_argument('--weight-velocity-loss', type=float, default=1,
+                   help='the weight of velocity loss')
+    p.add_argument('--out-path', default="./results/sub-mean-face", type=str, help="output path")
+    p.add_argument('--window-size', default=16, type=int, help="prediction window-size for online mode")
+
+    args = p.parse_args()
+
+    # env
+    mp.set_start_method(args.start_method)
+    torch.backends.cuda.matmul.allow_tf32 = True
+
+    # config
+    config = K.config.load_config(open(args.config))
+    model_config = config['model']
+    dataset_config = config['dataset']
+    opt_config = config['optimizer']
+    sched_config = config['lr_sched']
+    ema_sched_config = config['ema_sched']
+
+    # Add dataset parameters from config to args
+    args.dataset_path = dataset_config['location']
+    args.img_size = dataset_config.get('img_size', 256)
+    args.crop_size = dataset_config.get('crop_size', 224)
+    args.clip_length = dataset_config.get('clip_length', 256)
+
+    # Update model config with command line arguments
+    if hasattr(args, 'weight_kinematics_loss') and args.weight_kinematics_loss is not None:
+        model_config['weight_kinematics_loss'] = args.weight_kinematics_loss
+    if hasattr(args, 'weight_velocity_loss') and args.weight_velocity_loss is not None:
+        model_config['weight_velocity_loss'] = args.weight_velocity_loss
+
+    # accelerate
+    ddp_kwargs = accelerate.DistributedDataParallelKwargs(find_unused_parameters=model_config['skip_stages'] > 0)
+    accelerator = accelerate.Accelerator(
+        kwargs_handlers=[ddp_kwargs],
+        gradient_accumulation_steps=args.grad_accum_steps,
+        mixed_precision=args.mixed_precision,
+        log_with=None,
+        project_dir=None
+    )
+    device = accelerator.device
+    print(f'Process {accelerator.process_index} using device: {device}', flush=True)
+
+    # env
+    if args.seed is not None:
+        seeds = torch.randint(-2 ** 63, 2 ** 63 - 1, [accelerator.num_processes],
+                              generator=torch.Generator().manual_seed(args.seed))
+        torch.manual_seed(seeds[accelerator.process_index])
+
+    # model
+    inner_model = K.config.make_model(config)
+    inner_model_ema = deepcopy(inner_model)
+    # n_params：params num
+    if accelerator.is_main_process:
+        print('Parameters:', K.utils.n_params(inner_model))
+
+    # If logging to wandb, initialize the run
+    use_wandb = accelerator.is_main_process and args.wandb_project
+    if use_wandb:
+        # wandb: visualizing and tacking your machine learning experiments
+        import wandb
+        log_config = vars(args)
+        log_config['config'] = config
+        log_config['parameters'] = K.utils.n_params(inner_model)
+        wandb.init(project=args.wandb_project, entity=args.wandb_entity, group=args.wandb_group, config=log_config,
+                   save_code=True)
+
+    if opt_config['type'] == 'adamw':
+        opt = optim.AdamW(inner_model.parameters(),
+                          lr=opt_config['lr'] if args.lr is None else args.lr,
+                          betas=tuple(opt_config['betas']),
+                          eps=opt_config['eps'],
+                          weight_decay=opt_config['weight_decay'])
+    elif opt_config['type'] == 'sgd':
+        opt = optim.SGD(inner_model.parameters(),
+                        lr=opt_config['lr'] if args.lr is None else args.lr,
+                        momentum=opt_config.get('momentum', 0.),
+                        nesterov=opt_config.get('nesterov', False),
+                        weight_decay=opt_config.get('weight_decay', 0.))
+    else:
+        raise ValueError('Invalid optimizer type')
+
+    if sched_config['type'] == 'inverse':
+        sched = K.utils.InverseLR(opt,
+                                  inv_gamma=sched_config['inv_gamma'],
+                                  power=sched_config['power'],
+                                  warmup=sched_config['warmup'])
+    elif sched_config['type'] == 'exponential':
+        sched = K.utils.ExponentialLR(opt,
+                                      num_steps=sched_config['num_steps'],
+                                      decay=sched_config['decay'],
+                                      warmup=sched_config['warmup'])
+    elif sched_config['type'] == 'constant':
+        sched = optim.lr_scheduler.LambdaLR(opt, lambda _: 1.0)
+    else:
+        raise ValueError('Invalid schedule type')
+
+    assert ema_sched_config['type'] == 'inverse'
+    ema_sched = K.utils.EMAWarmup(power=ema_sched_config['power'],
+                                  max_value=ema_sched_config['max_value'])
+
+    train_dl = get_dataloader(args, "train", load_audio=True, load_video_s=False, load_video_l=False,
+                              load_emotion_s=False, load_emotion_l=False, load_3dmm_s=True, load_3dmm_l=True)
+
+    if args.grow:
+        if not args.grow_config:
+            raise ValueError('--grow requires --grow-config')
+        ckpt = torch.load(args.grow, map_location='cpu')
+        old_config = K.config.load_config(open(args.grow_config))
+        old_inner_model = K.config.make_model(old_config)
+        old_inner_model.load_state_dict(ckpt['model_ema'])
+        if old_config['model']['skip_stages'] != model_config['skip_stages']:
+            old_inner_model.set_skip_stages(model_config['skip_stages'])
+        inner_model.load_state_dict(old_inner_model.state_dict())
+        del ckpt, old_inner_model
+
+    inner_model, inner_model_ema, opt, train_dl = accelerator.prepare(inner_model, inner_model_ema, opt, train_dl)
+    if use_wandb:
+        wandb.watch(inner_model)
+    if args.gns:
+        gns_stats_hook = K.gns.DDPGradientStatsHook(inner_model)
+        gns_stats = K.gns.GradientNoiseScale()
+    else:
+        gns_stats = None
+    sigma_min = model_config['sigma_min']
+    sigma_max = model_config['sigma_max']
+    sample_density = K.config.make_sample_density(model_config)
+
+    model = K.config.make_denoiser_wrapper(config)(inner_model)
+    model_ema = K.config.make_denoiser_wrapper(config)(inner_model_ema)
+
+    state_path = Path(f'{os.path.join(args.out_path, args.name)}_state.json')
+
+    audio_encoder = Wav2Vec2ForCTC.from_pretrained("../external/facebook/wav2vec2-base-960h").to(device)
+    audio_encoder.freeze_feature_extractor()
+
+    if args.resume:
+        ckpt_path = args.resume
+        if accelerator.is_main_process:
+            print(f'Resuming from {ckpt_path}...')
+        ckpt = torch.load(ckpt_path, map_location='cpu')
+        accelerator.unwrap_model(model.inner_model).load_state_dict(ckpt['model'], strict=False)
+        accelerator.unwrap_model(model_ema.inner_model).load_state_dict(ckpt['model_ema'], strict=False)
+        sched.load_state_dict(ckpt['sched'])
+        ema_sched.load_state_dict(ckpt['ema_sched'])
+        epoch = ckpt['epoch'] + 1
+        step = ckpt['step'] + 1
+        if args.gns and ckpt.get('gns_stats', None) is not None:
+            gns_stats.load_state_dict(ckpt['gns_stats'])
+        del ckpt
+    else:
+        epoch = 0
+        step = 0
+
+    evaluate_enabled = args.evaluate_every > 0 and args.evaluate_n > 0
+
+    @torch.no_grad()
+    @K.utils.eval_mode(model_ema)
+    def evaluate():
+        if not evaluate_enabled:
+            return
+        if accelerator.is_main_process:
+            tqdm.write('Evaluating...')
+        sigmas = K.sampling.get_sigmas_karras(50, sigma_min, sigma_max, rho=7., device=device)
+
+        def sample_fn(n, t):
+            interval_num = t // args.window_size
+            x_0_out = None
+            for i in range(0, interval_num):
+                if i != (interval_num - 1):
+                    x = torch.randn([n, args.window_size, model_config['input_channels']], device=device) * sigma_max
+                else:
+                    interval = args.window_size + t % args.window_size
+                    x = torch.randn([n, interval, model_config['input_channels']], device=device) * sigma_max
+
+                x_0 = K.sampling.sample_dpmpp_2m(model_ema, x, sigmas, disable=True)
+                if i != 0:
+                    x_0_out = torch.cat((x_0_out, x_0), 1)
+                else:
+                    x_0_out = x_0
+            return x_0_out
+
+    def save():
+        accelerator.wait_for_everyone()
+        if not os.path.exists(args.out_path):
+            os.makedirs(args.out_path)
+        filename = os.path.join(args.out_path, f'{args.name}_{step:08}.pth')
+        if accelerator.is_main_process:
+            tqdm.write(f'Saving to {filename}...')
+        obj = {
+            'model': accelerator.unwrap_model(model.inner_model).state_dict(),
+            'model_ema': accelerator.unwrap_model(model_ema.inner_model).state_dict(),
+            'opt': opt.state_dict(),
+            'sched': sched.state_dict(),
+            'ema_sched': ema_sched.state_dict(),
+            'epoch': epoch,
+            'step': step,
+            'gns_stats': gns_stats.state_dict() if gns_stats is not None else None,
+        }
+        accelerator.save(obj, filename)
+        if accelerator.is_main_process:
+            state_obj = {'latest_checkpoint': filename}
+            json.dump(state_obj, open(state_path, 'w'))
+        if args.wandb_save_model and use_wandb:
+            wandb.save(filename)
+
+    def save_current():
+        if not os.path.exists(args.out_path):
+            os.makedirs(args.out_path)
+        filename = os.path.join(args.out_path, f'{args.name}_current.pth')
+        if accelerator.is_main_process:
+            tqdm.write(f'Saving to {filename}...')
+        obj = {
+            'model': accelerator.unwrap_model(model.inner_model).state_dict(),
+            'model_ema': accelerator.unwrap_model(model_ema.inner_model).state_dict(),
+            'opt': opt.state_dict(),
+            'sched': sched.state_dict(),
+            'ema_sched': ema_sched.state_dict(),
+            'epoch': epoch,
+            'step': step,
+            'gns_stats': gns_stats.state_dict() if gns_stats is not None else None,
+        }
+        accelerator.save(obj, filename)
+        if accelerator.is_main_process:
+            state_obj = {'latest_checkpoint': filename}
+            json.dump(state_obj, open(state_path, 'w'))
+        if args.wandb_save_model and use_wandb:
+            wandb.save(filename)
+
+    try:
+        while True:
+            for batch in tqdm(train_dl, disable=not accelerator.is_main_process):
+                with accelerator.accumulate(model):
+                    _, speaker_audio_clip, _, speaker_3dmm, _, _, _, listener_3dmm, _, _ = batch
+                    noise = torch.randn_like(listener_3dmm)
+                    sigma, mask = sample_density([listener_3dmm.shape[0]], device=device)
+                    cond_dict = {}
+                    frame_num = speaker_3dmm.shape[1]
+                    speaker_audio_clip = audio_encoder(speaker_audio_clip.to(device), frame_num=frame_num)[:,
+                                         : 2 * frame_num]
+                    cond_dict['speaker_audio'] = speaker_audio_clip
+                    cond_dict['speaker_3dmm'] = speaker_3dmm
+                    losses = model.loss(listener_3dmm, noise, sigma, args.window_size, cross_cond=cond_dict, mask=mask)
+                    losses_all = accelerator.gather(losses)
+                    loss = losses_all.mean()
+                    accelerator.backward(losses.mean())
+                    if args.gns:
+                        sq_norm_small_batch, sq_norm_large_batch = gns_stats_hook.get_stats()
+                        gns_stats.update(sq_norm_small_batch, sq_norm_large_batch, listener_3dmm.shape[0],
+                                         listener_3dmm.shape[0] * accelerator.num_processes)
+                    opt.step()
+                    sched.step()
+                    opt.zero_grad()
+                    if accelerator.sync_gradients:
+                        ema_decay = ema_sched.get_value()
+                        K.utils.ema_update(model, model_ema, ema_decay)
+                        ema_sched.step()
+
+                if accelerator.is_main_process:
+                    if step % 25 == 0:
+                        if args.gns:
+                            tqdm.write(
+                                f'Epoch: {epoch}, step: {step}, loss: {loss.item():g}, gns: {gns_stats.get_gns():g}')
+                        else:
+                            tqdm.write(f'Epoch: {epoch}, step: {step}, loss: {loss.item():g}')
+
+                if use_wandb:
+                    log_dict = {
+                        'epoch': epoch,
+                        'loss': loss.item(),
+                        'lr': sched.get_last_lr()[0],
+                        'ema_decay': ema_decay,
+                    }
+                    if args.gns:
+                        log_dict['gradient_noise_scale'] = gns_stats.get_gns()
+                    wandb.log(log_dict, step=step)
+
+                if evaluate_enabled and step > 0 and step % args.evaluate_every == 0:
+                    evaluate()
+
+                if step > 0 and step % args.save_every == 0:
+                    save()
+
+                step += 1
+            save_current()
+            epoch += 1
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == '__main__':
+    main()

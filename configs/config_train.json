@@ -1,0 +1,70 @@
+{
+    "model": {
+        "input_channels": 58,
+        "mapping_out": 256,
+        "depths": [2, 4, 4],
+        "channels": [128, 256, 512],
+        "self_attn_depths": [false, false, false],
+        "cross_attn_depths": [2, 2, 2],
+        "has_variance": false,
+        "loss_config": "karras",
+        "loss_weighting": "karras",
+        "weight_kinematics_loss": 0.01,
+        "weight_velocity_loss": 1.0,
+        "dropout_rate": 0.05,
+        "augment_wrapper": true,
+        "augment_prob": 0.12,
+        "sigma_data": 0.5,
+        "sigma_min": 1e-2,
+        "sigma_max": 80,
+        "cross_visual_cond_dim": 58,
+        "cross_audio_cond_dim": 768,
+        "mapping_cond_dim": 0,
+        "unet_cond_dim": 0,
+        "skip_stages": 0,
+        "sigma_sample_density": {
+            "type": "cosine"
+        }
+    },
+    "dataset": {
+        "location": "/ibex/project/c2191/luoc/dataset/REACT2024",
+        "img_size": 256,
+        "crop_size": 224,
+        "clip_length": 256,
+        "num_workers": 4,
+        "pin_memory": true
+    },
+    "optimizer": {
+        "type": "adamw",
+        "lr": 1e-4,
+        "betas": [0.95, 0.999],
+        "eps": 1e-6,
+        "weight_decay": 1e-3
+    },
+    "lr_sched": {
+        "type": "constant"
+    },
+    "ema_sched": {
+        "type": "inverse",
+        "power": 0.6667,
+        "max_value": 0.9999
+    },
+    "training": {
+        "batch_size": 100,
+        "grad_accum_steps": 1,
+        "mixed_precision": "fp16",
+        "max_epochs": 1000,
+        "save_every": 1000,
+        "evaluate_every": 100,
+        "evaluate_n": 64,
+        "gns": false,
+        "gradient_clip_norm": 1.0
+    },
+    "logging": {
+        "log_every": 10,
+        "wandb_project": "reactdiff_training",
+        "wandb_entity": null,
+        "wandb_group": "experiment_1",
+        "wandb_save_model": false
+    }
+}
