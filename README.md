@@ -6,15 +6,17 @@
 [![Paper](https://img.shields.io/badge/📄-Paper%20arXiv-red)](https://arxiv.org/abs/2510.04712)
 [![Code](https://img.shields.io/badge/💻-Code%20GitHub-black)](https://github.com/lingjivoo/ReactDiff)
 
+<div align="center">
 https://github.com/user-attachments/assets/471100bc-5adb-4130-a866-8d964f538dc5
+</div>
 
 <div align="center">
   
-https://github.com/user-attachments/assets/19fc7612-c7ee-46ad-9dd4-99fb2235b4ef  
+https://github.com/user-attachments/assets/bd7787ac-184f-4c73-bd6e-625edc9aea4f
 
-https://github.com/user-attachments/assets/dc5f6f6e-4355-4302-a67d-920fefbdb32f  
+https://github.com/user-attachments/assets/8f206c93-e5d9-4e10-83f1-b38ba2d826a2
 
-https://github.com/user-attachments/assets/021356d9-d055-4716-bb1f-5a6274b3b899
+https://github.com/user-attachments/assets/41d111f0-a996-477b-aa13-648c12eaa25a
 </div>
 
 <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
@@ -415,6 +417,7 @@ Thanks to the open source of the following projects:
 
 - [Karras et al. (2022) Diffusion Models](https://github.com/crowsonkb/k-diffusion)
 - [FaceVerse](https://github.com/LizhenWangT/FaceVerse)
+- [ReactFace](https://github.com/lingjivoo/ReactFace)
 - [PIRender](https://github.com/RenYurui/PIRender)
 - [Wav2Vec2](https://github.com/huggingface/transformers)
 - [Accelerate](https://github.com/huggingface/accelerate)
