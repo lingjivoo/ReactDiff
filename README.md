@@ -30,7 +30,6 @@ https://github.com/user-attachments/assets/41d111f0-a996-477b-aa13-648c12eaa25a
   
 ---
 
-**💡 Tip**: Click the buttons above to watch the demo videos in a new tab. The videos showcase ReactDiff's ability to generate realistic listener facial reactions from speaker audio and visual cues.
 
 </div>
 
