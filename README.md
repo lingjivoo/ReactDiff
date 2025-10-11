@@ -6,6 +6,8 @@
 [![Paper](https://img.shields.io/badge/📄-Paper%20arXiv-red)](https://arxiv.org/abs/2510.04712)
 [![Code](https://img.shields.io/badge/💻-Code%20GitHub-black)](https://github.com/lingjivoo/ReactDiff)
 
+https://github.com/user-attachments/assets/471100bc-5adb-4130-a866-8d964f538dc5
+
 <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
   <div style="text-align: center;">
     <a href="https://reactdiff.github.io/assets/media/video-3.mp4" target="_blank">
