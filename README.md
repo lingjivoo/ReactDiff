@@ -1,4 +1,4 @@
-# 🎭 ReactDiff: Realistic Listener Reaction Generation
+# 🎭 ReactDiff: Fundamental Multiple Appropriate Facial Reaction Diffusion Model
 
 <div align="center">
   
