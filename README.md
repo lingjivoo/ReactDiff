@@ -7,13 +7,19 @@
 [![Code](https://img.shields.io/badge/💻-Code%20GitHub-black)](https://github.com/lingjivoo/ReactDiff)
 
 <div align="center">
-  
+
 https://github.com/user-attachments/assets/471100bc-5adb-4130-a866-8d964f538dc5
 
 </div>
 
+
+## 🎥 Demo Videos
+
+**High-quality listener reaction generation with ReactDiff**
+
+### 📺 Video:
 <div align="center">
-  
+
 https://github.com/user-attachments/assets/bd7787ac-184f-4c73-bd6e-625edc9aea4f
 
 https://github.com/user-attachments/assets/8f206c93-e5d9-4e10-83f1-b38ba2d826a2
@@ -21,44 +27,7 @@ https://github.com/user-attachments/assets/8f206c93-e5d9-4e10-83f1-b38ba2d826a2
 https://github.com/user-attachments/assets/41d111f0-a996-477b-aa13-648c12eaa25a
 </div>
 
-<div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-  <div style="text-align: center;">
-    <a href="https://reactdiff.github.io/assets/media/video-3.mp4" target="_blank">
-      <img src="https://img.shields.io/badge/🎭-Watch%20Demo-blue?style=for-the-badge&logo=video" alt="Realistic Listener Reactions" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
-    </a>
-    <p style="margin-top: 8px; font-size: 14px; color: #666;">🎭 Realistic Listener Reactions</p>
-  </div>
-  <div style="text-align: center;">
-    <a href="https://reactdiff.github.io/assets/media/video-2.mp4" target="_blank">
-      <img src="https://img.shields.io/badge/🎬-Watch%20Demo-green?style=for-the-badge&logo=video" alt="30-Second Full Sequences" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
-    </a>
-    <p style="margin-top: 8px; font-size: 14px; color: #666;">🎬 30-Second Full Sequences</p>
-  </div>
-  <div style="text-align: center;">
-    <a href="https://reactdiff.github.io/assets/media/video-4.mp4" target="_blank">
-      <img src="https://img.shields.io/badge/⚡-Watch%20Demo-orange?style=for-the-badge&logo=video" alt="Real-Time Processing" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
-    </a>
-    <p style="margin-top: 8px; font-size: 14px; color: #666;">⚡ Real-Time Processing</p>
-  </div>
-</div>
-
-</div>
-
-<div align="center">
   
-## 🎥 Demo Videos
-
-**High-quality listener reaction generation with ReactDiff**
-
-### 📺 Video 1: Realistic Listener Reactions
-[![Watch Demo](https://img.shields.io/badge/🎭-Watch%20Realistic%20Listener%20Reactions-blue?style=for-the-badge&logo=video)](https://reactdiff.github.io/assets/media/video-3.mp4)
-
-### 📺 Video 2: 30-Second Full Sequences  
-[![Watch Demo](https://img.shields.io/badge/🎬-Watch%2030s%20Full%20Sequences-green?style=for-the-badge&logo=video)](https://reactdiff.github.io/assets/media/video-2.mp4)
-
-### 📺 Video 3: Real-Time Processing
-[![Watch Demo](https://img.shields.io/badge/⚡-Watch%20Real--Time%20Processing-orange?style=for-the-badge&logo=video)](https://reactdiff.github.io/assets/media/video-4.mp4)
-
 ---
 
 **💡 Tip**: Click the buttons above to watch the demo videos in a new tab. The videos showcase ReactDiff's ability to generate realistic listener facial reactions from speaker audio and visual cues.
