@@ -6,11 +6,14 @@
 [![Paper](https://img.shields.io/badge/📄-Paper%20arXiv-red)](https://arxiv.org/abs/2510.04712)
 [![Code](https://img.shields.io/badge/💻-Code%20GitHub-black)](https://github.com/lingjivoo/ReactDiff)
 
+## ACM MM 2025
+
 <div align="center">
 
 https://github.com/user-attachments/assets/471100bc-5adb-4130-a866-8d964f538dc5
 
 </div>
+
 
 
 ## 🎥 Demo Videos
