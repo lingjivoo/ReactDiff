@@ -333,6 +333,10 @@ python sample.py \
 </details>
 
 
+## Checkpoints
+
+Our trained model checkpoint could be found at [Google Drive](https://drive.google.com/file/d/1AooiA3nnR8945_KCdEy4Lb22jg8gzfi6/view?usp=sharing)
+
 ---
 
 ## 🎯 Key Features
