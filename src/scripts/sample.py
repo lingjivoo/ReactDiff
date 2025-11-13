@@ -42,7 +42,7 @@ def main():
                    help='the number of denoising steps')
     p.add_argument('--num-workers', type=int, default=8,
                    help='the number of data loader workers')
-    p.add_argument('--momentum', type=float, default=0.9,
+    p.add_argument('--momentum', type=float, default=0.99,
                    help='the momentum for sampling')
     p.add_argument('--gpu-ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
     p.add_argument('--out-path', default="./results/sample_output", type=str, help="output path")
@@ -93,9 +93,34 @@ def main():
     print(f'Number of processes: {accelerator.num_processes}', flush=True)
     print(f'Mixed precision: {accelerator.mixed_precision}', flush=True)
 
-    # Load model
     inner_model = K.config.make_model(config).eval().requires_grad_(False).to(device)
-    # inner_model.load_state_dict(torch.load(args.checkpoint, map_location='cpu')['model_ema'])
+
+    # Load model
+    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
+    raw_sd = ckpt.get("model", ckpt)
+    def _strip_prefix(state_dict, prefixes=("inner_model.", "module.", "model.")):
+        out = {}
+        for k, v in state_dict.items():
+            for p in prefixes:
+                if k.startswith(p):
+                    k = k[len(p):]
+            out[k] = v
+        return out
+    if isinstance(raw_sd, dict) and any(isinstance(v, torch.Tensor) for v in raw_sd.values()):
+        sd = _strip_prefix(raw_sd)
+    else:
+        # e.g., ckpt["model_ema"] is already a state_dict-like object
+        sd = _strip_prefix(ckpt["model_ema"] if "model_ema" in ckpt else ckpt["model"])
+    # (Optional) sanity check: what your model expects vs. what you have
+    exp = set(inner_model.state_dict().keys())
+    got = set(sd.keys())
+    missing = sorted(exp - got)
+    unexpected = sorted(got - exp)
+    print(f"[load] missing={len(missing)} unexpected={len(unexpected)}")
+    if missing[:5]: print("  missing sample:", missing[:5])
+    if unexpected[:5]: print("  unexpected sample:", unexpected[:5])
+    inner_model.load_state_dict(sd, strict=False)  # or strict=False to ignore harmless extras
+
     accelerator.print('Parameters:', K.utils.n_params(inner_model))
     model = K.Denoiser(inner_model, sigma_data=model_config['sigma_data'])
 
@@ -111,13 +136,13 @@ def main():
     sigma_min = model_config['sigma_min']
     sigma_max = model_config['sigma_max']
     
-    if torch.cuda.is_available():
-        render = Render('cuda', use_pirender=True)  # Enable PIRender
-        print("✅ PIRender enabled for GPU rendering")
+    render = Render('cuda' if torch.cuda.is_available() else 'cpu', use_pirender=True)
+    if getattr(render, "use_pirender", False):
+        print("✅ PIRender enabled for rendering")
     else:
-        render = Render('cpu', use_pirender=False)  # Disable PIRender on CPU
-        print("⚠️  PIRender disabled - using placeholder rendering on CPU")
-    
+        print("⚠️ PIRender disabled — using placeholder frames")
+
+
     # Log memory usage if on GPU
     if torch.cuda.is_available():
         memory_info = render.get_memory_usage()
@@ -213,7 +238,8 @@ def main():
 
                         # Apply momentum
                         if i != 0:
-                            x_0[:,:,52:] = args.momentum * past_frame[:,:,52:] + (1 - args.momentum) * x_0[:,:,52:]
+                            x_0[:,:,55:] = args.momentum * past_frame[:,:,55:] + (1 - args.momentum) * x_0[:,:,55:]
+                            x_0[:,:,52:55] = args.momentum / 2 * past_frame[:,:,52:55] + (1 - args.momentum / 2) * x_0[:,:,52:55]
                             x_0_out = torch.cat((x_0_out, x_0), 1)
                         else:
                             x_0_out = x_0
