@@ -90,14 +90,7 @@ class KarrasAugmentWrapper(nn.Module):
         self.inner_model = model
     
     def forward(self, input, sigma, past_frame = None, aug_cond=None, mapping_cond=None, **kwargs):
-        if aug_cond is None:
-            aug_cond = input.new_zeros([input.shape[0], 9])
-        if mapping_cond is None:
-            mapping_cond = aug_cond
-        else:
-            mapping_cond = torch.cat([aug_cond, mapping_cond], dim=1)
-        return self.inner_model(input, sigma, past_frame, mapping_cond=mapping_cond, **kwargs)
-
+        return self.inner_model(input, sigma, past_frame, **kwargs)
 
     def set_skip_stages(self, skip_stages):
         return self.inner_model.set_skip_stages(skip_stages)
