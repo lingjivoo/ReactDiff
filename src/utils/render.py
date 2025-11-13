@@ -13,19 +13,24 @@ import sys
 from pathlib import Path
 from typing import Optional, Union, Tuple, List
 import logging
+from .utils import torch_img_to_np, _fix_image, torch_img_to_np2
 
 # Add external directory to path for PIRender imports
 current_dir = Path(__file__).parent
 external_dir = current_dir.parent / "external"
-sys.path.append(str(external_dir))
+pirender_dir = external_dir / "PIRender"
+sys.path.insert(0, str(external_dir))
+sys.path.insert(0, str(pirender_dir))
 
 try:
     from PIRender.face_model import FaceGenerator
-    from utils import torch_img_to_np, _fix_image, torch_img_to_np2
+    # these utils are your project’s utils, not PIRender’s
     PI_RENDER_AVAILABLE = True
-except ImportError:
+except Exception as e:
+    import traceback
     PI_RENDER_AVAILABLE = False
     logging.warning("PIRender not available. Using placeholder rendering.")
+    logging.warning(f"PIRender import error: {e}\n{traceback.format_exc()}")
 
 
 def obtain_seq_index(index, num_frames, semantic_radius=13):
@@ -34,16 +39,31 @@ def obtain_seq_index(index, num_frames, semantic_radius=13):
     seq = [min(max(item, 0), num_frames - 1) for item in seq]
     return seq
 
+#
+# def transform_semantic(semantic):
+#     """Transform semantic parameters for PIRender."""
+#     semantic_list = []
+#     for i in range(semantic.shape[0]):
+#         index = obtain_seq_index(i, semantic.shape[0])
+#         semantic_item = semantic[index, :].unsqueeze(0)
+#         semantic_list.append(semantic_item)
+#     semantic = torch.cat(semantic_list, dim=0)
+#     return semantic.transpose(1, 2)
 
-def transform_semantic(semantic):
-    """Transform semantic parameters for PIRender."""
+def transform_semantic(semantic: torch.Tensor) -> torch.Tensor:
+    # Accept (T,58) or (1,T,58)
+    if semantic.dim() == 3 and semantic.shape[0] == 1:
+        semantic = semantic.squeeze(0)
+    assert semantic.dim() == 2 and semantic.shape[1] == 58, \
+        f"transform_semantic expects (T,58), got {tuple(semantic.shape)}"
+    # ... then your original implementation
     semantic_list = []
     for i in range(semantic.shape[0]):
         index = obtain_seq_index(i, semantic.shape[0])
-        semantic_item = semantic[index, :].unsqueeze(0)
+        semantic_item = semantic[index, :].unsqueeze(0)  # (1, 27, 58)
         semantic_list.append(semantic_item)
-    semantic = torch.cat(semantic_list, dim=0)
-    return semantic.transpose(1, 2)
+    semantic = torch.cat(semantic_list, dim=0)           # (T, 27, 58)
+    return semantic.transpose(1, 2).contiguous()         # (T, 58, 27)
 
 
 class Render(nn.Module):
@@ -83,7 +103,7 @@ class Render(nn.Module):
         try:
             if reference_path.exists():
                 reference_face = np.load(reference_path)
-                logging.info(f"Loaded reference face from {reference_path}")
+                print(f"Loaded reference face from {reference_path}")
                 return reference_face
             else:
                 logging.warning(f"Reference face file not found at {reference_path}")
@@ -91,7 +111,7 @@ class Render(nn.Module):
             logging.error(f"Error loading reference face: {e}")
         
         # Return default reference face (neutral expression)
-        logging.info("Using default reference face parameters")
+        print("Using default reference face parameters")
         return np.zeros((1, 58), dtype=np.float32)
     
     def _init_pirender(self):
@@ -105,7 +125,7 @@ class Render(nn.Module):
             if checkpoint_path.exists():
                 checkpoint = torch.load(checkpoint_path, map_location=self.device)
                 self.face_generator.load_state_dict(checkpoint['state_dict'])
-                logging.info("PIRender checkpoint loaded successfully")
+                print("PIRender checkpoint loaded successfully")
             else:
                 logging.warning(f"PIRender checkpoint not found at {checkpoint_path}")
             
@@ -118,15 +138,18 @@ class Render(nn.Module):
                     np.load(mean_face_path).astype(np.float32)).view(1, 1, -1).to(self.device)
                 self.std_face = torch.FloatTensor(
                     np.load(std_face_path).astype(np.float32)).view(1, 1, -1).to(self.device)
-                
+
+                self._reverse_transform_3dmm = lambda e: (
+                    (e * self.std_face + self.mean_face).squeeze(0)  # std/mean are (1,1,C)
+                    if e.dim() == 3 else (e * self.std_face + self.mean_face)
+                )
                 # Create reverse transform for 3DMM parameters
-                self._reverse_transform_3dmm = lambda e: e * self.std_face + self.mean_face
-                logging.info("FaceVerse mean/std loaded successfully")
+                print("FaceVerse mean/std loaded successfully")
             else:
                 logging.warning("FaceVerse mean/std files not found, using identity transform")
                 self._reverse_transform_3dmm = lambda e: e
                 
-            logging.info("PIRender initialized successfully")
+            print("PIRender initialized successfully")
         except Exception as e:
             logging.error(f"Failed to initialize PIRender: {e}")
             self.use_pirender = False
@@ -189,7 +212,7 @@ class Render(nn.Module):
             video_path = output_path / f"{video_name}.mp4"
             self._create_video_from_frames(frames, str(video_path), fps)
             
-            logging.info(f"Video saved to: {video_path}")
+            print(f"Video saved to: {video_path}")
             return str(video_path)
             
         except Exception as e:
@@ -241,80 +264,68 @@ class Render(nn.Module):
         
         return reference_np
     
-    def _render_with_pirender(self, 
-                             listener_3dmm: np.ndarray, 
-                             listener_reference: np.ndarray,
-                             chunk_size: int = 32) -> List[np.ndarray]:
+    def _render_with_pirender(self, listener_3dmm: np.ndarray, listener_reference: np.ndarray,
+                              chunk_size: int = 32) -> List[np.ndarray]:
         """
-        Render frames using PIRender following the original implementation.
-        
-        Args:
-            listener_3dmm: 3DMM parameters (T, 58)
-            listener_reference: Reference frame (H, W, 3)
-            chunk_size: Number of frames to process at once (not used in original)
+        listener_3dmm: (T, 58)  numpy
+        listener_reference: (H, W, 3) BGR uint8
         """
         with torch.no_grad():
-            # Convert to tensors
-            T = listener_3dmm.shape[0]
-            listener_vectors = torch.from_numpy(listener_3dmm).float().to(self.device)
-            
-            # Apply reverse transform to 3DMM parameters
-            listener_vectors = self._reverse_transform_3dmm(listener_vectors)[0]
-            
-            # Transform semantic parameters for PIRender
-            semantics = transform_semantic(listener_vectors.detach()).to(self.device)
-            
-            # Prepare reference frames
-            C, H, W = listener_reference.shape
-            listener_reference_tensor = torch.from_numpy(listener_reference).permute(2, 0, 1).float() / 255.0
-            listener_reference_frames = listener_reference_tensor.repeat(T, 1, 1).view(T, C, H, W).to(self.device)
-            
-            # Process in chunks of 10 (following original implementation)
-            output_dict_list = []
-            duration = T // 10
-            
+            T = int(listener_3dmm.shape[0])
+
+            # ---- 3DMM -> tensor (T,58) ----
+            a = torch.from_numpy(listener_3dmm).float().to(self.device)   # (T,58)
+            a = self._reverse_transform_3dmm(a)
+            if a.dim() == 3:
+                # fix the accidental (1,T,58)
+                a = a.squeeze(0)
+            assert a.shape == (T, 58), f"3DMM shape must be (T,58), got {tuple(a.shape)}"
+
+            # ---- PIRender semantics (T,58,27) ----
+            semantics = transform_semantic(a).to(self.device).contiguous()
+            assert semantics.dim() == 3 and semantics.shape[0] == T, \
+                f"semantics must be (T,58,27), got {tuple(semantics.shape)}"
+
+            # ---- reference HWC(BGR uint8) -> NCHW float32 [-1,1] ----
+            ref_rgb = cv2.cvtColor(listener_reference, cv2.COLOR_BGR2RGB)           # (H,W,3)
+            ref_chw = torch.from_numpy(ref_rgb).permute(2, 0, 1).contiguous()       # (3,H,W)
+            ref_chw = (ref_chw.float() / 255.0) * 2.0 - 1.0                         # [-1,1]
+            ref_chw = ref_chw.unsqueeze(0).repeat(T, 1, 1, 1).to(self.device)       # (T,3,H,W)
+
+            # ---- chunked forward (10 chunks like the original) ----
+            out_chunks: List[np.ndarray] = []
+            duration = max(1, T // 10)
             for i in range(10):
-                if i != 9:
-                    listener_reference_copy = listener_reference_frames[i * duration:(i + 1) * duration]
-                    semantics_copy = semantics[i * duration:(i + 1) * duration]
-                else:
-                    listener_reference_copy = listener_reference_frames[i * duration:]
-                    semantics_copy = semantics[i * duration:]
-                
+                start = i * duration
+                end   = T if i == 9 else (i + 1) * duration
+                if start >= T:
+                    break
+
+                ref_i = ref_chw[start:end].contiguous()
+                sem_i = semantics[start:end].contiguous()  # (N,58,27)
+
                 try:
-                    output_dict = self.face_generator(listener_reference_copy, semantics_copy)
-                    fake_videos = output_dict['fake_image']
-                    fake_videos = torch_img_to_np2(fake_videos)
-                    output_dict_list.append(fake_videos)
-                    
-                    # Clear GPU cache
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                        
-                except Exception as e:
-                    logging.warning(f"PIRender failed for chunk {i}, using reference: {e}")
-                    # Use reference frames for this chunk
-                    chunk_frames = listener_reference.copy()
-                    chunk_frames = np.tile(chunk_frames, (semantics_copy.shape[0], 1, 1, 1))
-                    output_dict_list.append(chunk_frames)
-            
-            # Concatenate all chunks
-            listener_videos = np.concatenate(output_dict_list, axis=0)
-            
-            # Convert to list of frames
-            frames = []
-            for i in range(T):
-                if i < len(listener_videos):
-                    frame = listener_videos[i]
-                    # Convert RGB to BGR for OpenCV
-                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                    frames.append(frame)
-                else:
-                    # Fallback to reference frame
-                    frames.append(listener_reference.copy())
-            
-            logging.info(f"Generated {len(frames)} frames for video (expected {T})")
+                    out = self.face_generator(ref_i, sem_i)         # expects (N,3,H,W) & (N,58,27)
+                    fake = out["fake_image"]                        # (N,3,H,W), [-1,1] or [0,1]
+                    fake = fake.clamp(-1, 1) * 0.5 + 0.5            # -> [0,1]
+                    fake_np = (fake * 255.0).byte().cpu().permute(0, 2, 3, 1).numpy()  # (N,H,W,3) RGB
+                    out_chunks.append(fake_np)
+                except Exception as err:
+                    logging.warning(f"PIRender failed for chunk {i}, using reference: {err}")
+                    n = max(0, end - start)
+                    if n > 0:
+                        out_chunks.append(np.tile(ref_rgb[None, ...], (n, 1, 1, 1)))   # (N,H,W,3) RGB
+
+            if not out_chunks:
+                raise RuntimeError("No chunks produced in PIRender rendering.")
+
+            vid_rgb = np.concatenate(out_chunks, axis=0)[:T]   # (T,H,W,3) RGB
+            frames = [cv2.cvtColor(f, cv2.COLOR_RGB2BGR) for f in vid_rgb]
+            print(f"Generated {len(frames)} frames for rendering")
             return frames
+
+
+
     
     
     def _render_placeholder(self, 
@@ -325,7 +336,7 @@ class Render(nn.Module):
         for _ in range(len(listener_3dmm)):
             frames.append(listener_reference.copy())
         
-        logging.info(f"Generated {len(frames)} placeholder frames")
+        print(f"Generated {len(frames)} placeholder frames")
         return frames
     
     def _create_video_from_frames(self, 
@@ -354,8 +365,8 @@ class Render(nn.Module):
                 out.write(frame)
             
             expected_duration = len(frames) / fps
-            logging.info(f"Video created with {len(frames)} frames at {fps} FPS")
-            logging.info(f"Expected video duration: {expected_duration:.2f} seconds")
+            print(f"Video created with {len(frames)} frames at {fps} FPS")
+            print(f"Expected video duration: {expected_duration:.2f} seconds")
             
         finally:
             out.release()
@@ -396,7 +407,7 @@ class Render(nn.Module):
                     chunk_size=chunk_size
                 )
                 video_paths.append(video_path)
-                logging.info(f"Batch {i+1}/{len(video_names)} completed: {video_name}")
+                print(f"Batch {i+1}/{len(video_names)} completed: {video_name}")
                 
             except Exception as e:
                 logging.error(f"Failed to render {video_name}: {e}")
@@ -419,7 +430,7 @@ class Render(nn.Module):
         """Clear GPU memory cache."""
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            logging.info("GPU memory cache cleared")
+            print("GPU memory cache cleared")
 
 
 def create_renderer(device: str = 'cpu', use_pirender: bool = True) -> Render:
