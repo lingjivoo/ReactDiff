@@ -81,9 +81,9 @@ conda activate reactdiff
 
 #### 2️⃣ Install PyTorch with CUDA support
 ```bash
-# Install PyTorch 2.0.1 with CUDA 11.8 support
-pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 \
-    --index-url https://download.pytorch.org/whl/cu118
+# Install PyTorch 2.4.0 with CUDA 12.4 support
+pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+
 ```
 
 #### 3️⃣ Install PyTorch3D for 3D operations
