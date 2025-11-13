@@ -12,7 +12,7 @@
         "weight_kinematics_loss": 0.01,
         "weight_velocity_loss": 1.0,
         "dropout_rate": 0.05,
-        "augment_wrapper": true,
+        "augment_wrapper": False,
         "augment_prob": 0.12,
         "sigma_data": 0.5,
         "sigma_min": 1e-2,
@@ -27,7 +27,7 @@
         }
     },
     "dataset": {
-        "location": "/ibex/project/c2191/luoc/dataset/REACT2024",
+        "location": "./data",
         "img_size": 256,
         "crop_size": 224,
         "clip_length": 256,
